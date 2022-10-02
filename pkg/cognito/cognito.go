@@ -14,7 +14,7 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"token-exchange-cli/pkg/util"
+	"tx/pkg/util"
 )
 
 type cognitoConfig struct {

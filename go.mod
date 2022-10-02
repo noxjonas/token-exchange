@@ -1,4 +1,4 @@
-module token-exchange-cli
+module tx
 
 go 1.19
 

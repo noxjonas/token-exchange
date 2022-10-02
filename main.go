@@ -1,7 +1,7 @@
 package main
 
 import (
-	"token-exchange-cli/pkg/cmd"
+	"tx/pkg/cmd"
 )
 
 func main() {

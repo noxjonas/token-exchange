@@ -7,9 +7,9 @@ import (
 	"github.com/spf13/viper"
 	"k8s.io/klog/v2"
 	"os"
-	"token-exchange-cli/pkg/cognito"
-	"token-exchange-cli/pkg/logs"
-	"token-exchange-cli/pkg/util"
+	"tx/pkg/cognito"
+	"tx/pkg/logs"
+	"tx/pkg/util"
 )
 
 var Port string
