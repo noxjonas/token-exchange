@@ -32,7 +32,7 @@ launches browser url with redirect url as parameter to return data
 	},
 	PersistentPostRun: func(cmd *cobra.Command, args []string) {
 		// save config on successful run
-		util.CheckErr(viper.WriteConfigAs(viper.ConfigFileUsed()))
+		util.CheckErr(viper.WriteConfig())
 	},
 }
 
@@ -86,7 +86,7 @@ func initConfig() {
 	}
 
 	if !EntrypointCmd.Flags().Changed("v") {
-		util.CheckErr(EntrypointCmd.Flags().Set("v", viper.GetString("v")))
+		viper.Set("v", "0")
 	}
 
 	err := viper.WriteConfigAs(viper.ConfigFileUsed())
