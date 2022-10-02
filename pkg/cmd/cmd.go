@@ -48,15 +48,14 @@ func init() {
 
 	EntrypointCmd.AddCommand(cognito.Cmd)
 
-	EntrypointCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default is $HOME/.tx-config.yml)")
-	EntrypointCmd.PersistentFlags().StringVarP(&Port, "port", "p", "8080", "overwrite ports to use, can add multiple")
+	EntrypointCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default is ~/.tx.yml)")
+	EntrypointCmd.PersistentFlags().StringVarP(&Port, "port", "p", "8080", "which port to listen on localhost")
 	cobra.OnInitialize(initConfig)
 }
 
 func initConfig() {
 	viper.SetConfigType("yaml")
-	// viper will prefer flags
-	//from command line rather than file
+	// viper will prefer flags from command line rather than file
 	if err := viper.BindPFlags(EntrypointCmd.Flags()); err != nil {
 		klog.ErrorS(err, "Failed bind flags")
 	}
@@ -89,7 +88,7 @@ func initConfig() {
 	if !EntrypointCmd.Flags().Changed("v") {
 		util.CheckErr(EntrypointCmd.Flags().Set("v", viper.GetString("v")))
 	}
-	klog.V(1).InfoS("verbosity", "v", viper.GetString("v"))
+
 	err := viper.WriteConfigAs(viper.ConfigFileUsed())
 	if err != nil {
 		klog.V(50).InfoS("Using err", "err", err)

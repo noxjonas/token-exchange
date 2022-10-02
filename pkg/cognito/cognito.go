@@ -37,6 +37,8 @@ type Session struct {
 	ExpiresIn    int    `json:"expires_in"`
 }
 
+var newSession bool
+
 func complete() {
 	viper.Set("cognito", config)
 	util.CheckErr(viper.WriteConfig())
@@ -46,19 +48,17 @@ func complete() {
 }
 
 var Cmd = &cobra.Command{
-	Use:     "cognito [COGNITO-DOMAIN] [CLIENT-ID] [CLIENT_SECRET]",
+	Use:     "cognito [COGNITO-DOMAIN] [CLIENT-ID] ([CLIENT_SECRET] if required)",
 	Aliases: []string{"cognito"},
 	Short:   "returns access token by default. see --help for more options",
-	//Args:    cobra.ExactArgs(3),
 	Run: func(cmd *cobra.Command, args []string) {
-		klog.V(100).InfoS("current config empty", "config", config)
 		err := viper.UnmarshalKey("cognito", config)
 		if err != nil {
 			klog.V(50).InfoS("Failed to parse config", "err", err)
 			return
 		}
 
-		if config.Session != nil && config.Session.RefreshToken != "" {
+		if newSession == false && config.Session != nil && config.Session.RefreshToken != "" {
 			klog.V(50).InfoS("refresh token found. refreshing session...")
 
 			err := resumeSession()
@@ -76,8 +76,10 @@ var Cmd = &cobra.Command{
 			os.Exit(0)
 		}
 
+		util.CheckErr(healthCheck())
+
 		wg := new(sync.WaitGroup)
-		wg.Add(2)
+		wg.Add(3)
 		go util.RunCallbackServer(wg, loginCallback)
 		go util.OpenBrowser(wg, config.LoginUrl)
 		wg.Wait()
@@ -89,15 +91,20 @@ var Cmd = &cobra.Command{
 func toOptions(args []string) error {
 	var err error
 
+	klog.V(50).InfoS("clearing previous session")
+	config.Session = &Session{}
+
 	if config.Domain == "" || config.ClientId == "" || len(args) > 0 {
 		if len(args) < 2 {
-			return errors.New("see help")
+			return errors.New("see help for usage")
 
 		}
 		config.Domain = args[0]
 		config.ClientId = args[1]
 		if len(args) == 3 {
 			config.ClientSecret = args[2]
+		} else {
+			config.ClientSecret = ""
 		}
 	}
 
@@ -110,7 +117,31 @@ func toOptions(args []string) error {
 }
 
 func healthCheck() error {
-	// check if the hosted UI is set up with the correct redirect uri
+	req, err := http.NewRequest("GET", config.LoginUrl, nil)
+	if err != nil {
+		return err
+	}
+
+	client := new(http.Client)
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if strings.Contains(req.URL.String(), "redirect_mismatch") {
+			return fmt.Errorf("invalid redirect path: 'http://%s' is not added to allowed redirect urls in your user pool", util.CallbackUrl())
+		} else if strings.Contains(req.URL.String(), "Client+does+not+exist") {
+			return fmt.Errorf("invalid client id '%s'", config.ClientId)
+		}
+		return nil
+	}
+
+	resp, err := client.Do(req)
+	if err == nil {
+		if resp.StatusCode != http.StatusOK {
+			return nil
+		}
+	} else {
+		return err
+	}
+
+	util.CheckErr(resp.Body.Close())
 	return nil
 }
 
@@ -127,7 +158,9 @@ func cognitoOAuthRequest(formData url.Values) (int, []byte, error) {
 	req.Header.Add("User-Agent", "tx/dev")
 	req.Header.Add("Accept", "*/*")
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Add("Authorization", fmt.Sprintf("Basic %s", token))
+	if config.ClientSecret != "" {
+		req.Header.Add("Authorization", fmt.Sprintf("Basic %s", token))
+	}
 
 	resp, _ := client.Do(req)
 
@@ -157,7 +190,8 @@ func resumeSession() error {
 	return err
 }
 
-func loginCallback(params map[string][]string) {
+func loginCallback(params map[string][]string) error {
+	klog.V(50).InfoS("params from callback", "params", params)
 	data := url.Values{
 		"grant_type":   {"authorization_code"},
 		"client_id":    {config.ClientId},
@@ -169,11 +203,21 @@ func loginCallback(params map[string][]string) {
 	util.CheckErr(err)
 
 	if statusCode != http.StatusOK {
-		klog.Fatal("failed to fetch tokens:", "status", statusCode, "body", string(body))
+		var obj struct {
+			Error string `json:"error"`
+		}
+		_ = json.Unmarshal(body, &obj)
+		if obj.Error == "invalid_client" {
+			fmt.Printf("does your client require a secret? if so, provide it as third arg. your secret may be invalid too\n")
+		}
+
+		return fmt.Errorf("failed to fetch tokens: statusCode=%d body=%s", statusCode, string(body))
 	}
 
 	util.CheckErr(json.Unmarshal(body, &config.Session))
+	return nil
+}
 
-	//	TODO:  "cognito oauth2 response" status="400 Bad Request" body="{\"error\":\"invalid_client\"}"
-
+func init() {
+	Cmd.Flags().BoolVar(&newSession, "new-session", false, "skips resuming previous session")
 }
