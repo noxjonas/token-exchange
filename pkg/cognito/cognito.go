@@ -17,7 +17,7 @@ import (
 	"token-exchange-cli/pkg/util"
 )
 
-type ViperConfig struct {
+type cognitoConfig struct {
 	Domain       string
 	ClientId     string
 	ClientSecret string
@@ -27,7 +27,7 @@ type ViperConfig struct {
 	Session *Session
 }
 
-var config = &ViperConfig{}
+var config = &cognitoConfig{}
 
 type Session struct {
 	AccessToken  string `json:"access_token"`
@@ -37,15 +37,76 @@ type Session struct {
 	ExpiresIn    int    `json:"expires_in"`
 }
 
-func toOptions(args []string) {
-	config.Domain = args[0]
-	config.ClientId = args[1]
-	config.ClientSecret = args[2]
+func complete() {
+	viper.Set("cognito", config)
+	util.CheckErr(viper.WriteConfig())
+
+	fmt.Print(config.Session.AccessToken)
+	os.Exit(0)
+}
+
+var Cmd = &cobra.Command{
+	Use:     "cognito [COGNITO-DOMAIN] [CLIENT-ID] [CLIENT_SECRET]",
+	Aliases: []string{"cognito"},
+	Short:   "returns access token by default. see --help for more options",
+	//Args:    cobra.ExactArgs(3),
+	Run: func(cmd *cobra.Command, args []string) {
+		klog.V(100).InfoS("current config empty", "config", config)
+		err := viper.UnmarshalKey("cognito", config)
+		if err != nil {
+			klog.V(50).InfoS("Failed to parse config", "err", err)
+			return
+		}
+
+		if config.Session != nil && config.Session.RefreshToken != "" {
+			klog.V(50).InfoS("refresh token found. refreshing session...")
+
+			err := resumeSession()
+			if err != nil {
+				klog.V(50).InfoS("failed to resume session", "err", err)
+			} else {
+				complete()
+			}
+		}
+
+		// otherwise, init new session
+		err = toOptions(args)
+		if err != nil {
+			cmd.Help()
+			os.Exit(0)
+		}
+
+		wg := new(sync.WaitGroup)
+		wg.Add(2)
+		go util.RunCallbackServer(wg, loginCallback)
+		go util.OpenBrowser(wg, config.LoginUrl)
+		wg.Wait()
+
+		complete()
+	},
+}
+
+func toOptions(args []string) error {
+	var err error
+
+	if config.Domain == "" || config.ClientId == "" || len(args) > 0 {
+		if len(args) < 2 {
+			return errors.New("see help")
+
+		}
+		config.Domain = args[0]
+		config.ClientId = args[1]
+		if len(args) == 3 {
+			config.ClientSecret = args[2]
+		}
+	}
 
 	config.LoginUrl = fmt.Sprintf(
 		"%s/login?response_type=code&client_id=%s&redirect_uri=http://%s",
 		config.Domain, config.ClientId, util.CallbackUrl(),
 	)
+
+	return err
 }
 
 func healthCheck() error {
@@ -89,10 +150,10 @@ func resumeSession() error {
 	statusCode, body, err := cognitoOAuthRequest(data)
 
 	if statusCode != http.StatusOK {
-		return errors.New(fmt.Sprintf("failed to refresh session: status=%d body=%s", statusCode, string(body)))
+		return fmt.Errorf("failed to refresh session: status=%d body=%s", statusCode, string(body))
 	}
 
-	util.CheckErr(json.Unmarshal(body, config.Session))
+	util.CheckErr(json.Unmarshal(body, &config.Session))
 	return err
 }
 
@@ -111,48 +172,8 @@ func loginCallback(params map[string][]string) {
 		klog.Fatal("failed to fetch tokens:", "status", statusCode, "body", string(body))
 	}
 
-	util.CheckErr(json.Unmarshal(body, config.Session))
+	util.CheckErr(json.Unmarshal(body, &config.Session))
 
-}
+	//	TODO:  "cognito oauth2 response" status="400 Bad Request" body="{\"error\":\"invalid_client\"}"
 
-func complete() {
-	viper.Set("cognito", config)
-	fmt.Print(config.Session.AccessToken)
-	os.Exit(0)
-}
-
-var Cmd = &cobra.Command{
-	Use:     "cognito [COGNITO-DOMAIN] [CLIENT-ID] [CLIENT_SECRET]",
-	Aliases: []string{"cognito"},
-	Short:   "returns access token by default. see --help for more options",
-	//Args:    cobra.ExactArgs(3),
-	Run: func(cmd *cobra.Command, args []string) {
-		err := viper.UnmarshalKey("cognito", config)
-		if err != nil {
-			klog.V(50).InfoS("Failed to parse config", "err", err)
-			return
-		}
-		klog.V(100).InfoS("current config", "domain", config.Domain, "session", config.Session)
-
-		if config.Session.RefreshToken != "" {
-			klog.V(50).InfoS("refresh token found. refreshing session...")
-
-			err := resumeSession()
-			if err != nil {
-				klog.V(50).InfoS("failed to resume session", "err", err)
-			} else {
-				complete()
-			}
-		}
-
-		// otherwise init new session; check for args
-		toOptions(args)
-		wg := new(sync.WaitGroup)
-		wg.Add(2)
-		go util.RunCallbackServer(wg, loginCallback)
-		go util.OpenBrowser(wg, config.LoginUrl)
-		wg.Wait()
-
-		complete()
-	},
 }

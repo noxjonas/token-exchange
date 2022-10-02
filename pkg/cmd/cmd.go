@@ -14,7 +14,9 @@ import (
 
 var Port string
 
-var cfgFile string
+var configFile string
+
+var defaultConfigFilename = ".tx.yaml"
 
 var EntrypointCmd = &cobra.Command{
 	Use: "tx",
@@ -46,27 +48,26 @@ func init() {
 
 	EntrypointCmd.AddCommand(cognito.Cmd)
 
-	EntrypointCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.tx-config.yml)")
+	EntrypointCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default is $HOME/.tx-config.yml)")
 	EntrypointCmd.PersistentFlags().StringVarP(&Port, "port", "p", "8080", "overwrite ports to use, can add multiple")
 	cobra.OnInitialize(initConfig)
 }
 
 func initConfig() {
-	// todo: defaults
-	//viper.SetDefault("ContentDir", "content")
-
-	// viper will prefer flags from command line rather than file
+	viper.SetConfigType("yaml")
+	// viper will prefer flags
+	//from command line rather than file
 	if err := viper.BindPFlags(EntrypointCmd.Flags()); err != nil {
 		klog.ErrorS(err, "Failed bind flags")
 	}
-	if cfgFile != "" {
-		viper.SetConfigFile(cfgFile)
+	if configFile != "" {
+		viper.SetConfigFile(configFile)
 	} else {
 		home, err := homedir.Dir()
 		util.CheckErr(err)
 
 		viper.AddConfigPath(home)
-		viper.SetConfigName(".tx-config")
+		viper.SetConfigName(defaultConfigFilename)
 	}
 
 	viper.AutomaticEnv()
@@ -74,6 +75,14 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		klog.V(50).InfoS("Using config", "file", viper.ConfigFileUsed())
 	} else {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+
+			filepath, err := homedir.Expand(fmt.Sprintf("~/%s", defaultConfigFilename))
+			util.CheckErr(err)
+			util.CheckErr(viper.WriteConfigAs(filepath))
+			klog.V(50).InfoS("wrote new config file", "filepath", filepath)
+
+		}
 		klog.V(50).InfoS(err.Error())
 	}
 
@@ -86,6 +95,6 @@ func initConfig() {
 		klog.V(50).InfoS("Using err", "err", err)
 	}
 
-	klog.V(50).InfoS("Using config", "ConfigFileUsed", viper.ConfigFileUsed())
+	klog.V(50).InfoS("Using config file", "ConfigFileUsed", viper.ConfigFileUsed())
 
 }
