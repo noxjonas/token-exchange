@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"io"
 	"k8s.io/klog/v2"
 	"net/http"
@@ -28,32 +27,24 @@ type Session struct {
 var session *Session
 
 type Options struct {
-	Target string // redirect_uri={url} is added by default?
-	//Signature bool // Add signature={key} param?
-
-	Port      string
-	ReturnUri string
-	LoginUrl  string
-
-	SignInUrl    string
+	Domain       string
 	ClientId     string
 	ClientSecret string
-	RedirectUri  string
+
+	LoginUrl string // inferred
 }
 
 var options Options
 
 func toOptions(args []string) {
 	options = Options{
-		SignInUrl:    args[0],
+		Domain:       args[0],
 		ClientId:     args[1],
 		ClientSecret: args[2],
-		Port:         viper.GetString("port"),
-		RedirectUri:  fmt.Sprintf("localhost:%s", viper.GetString("port")),
 	}
 	options.LoginUrl = fmt.Sprintf(
 		"%s/login?response_type=code&client_id=%s&redirect_uri=http://%s",
-		options.SignInUrl, options.ClientId, options.RedirectUri,
+		options.Domain, options.ClientId, util.CallbackUrl(),
 	)
 }
 
@@ -73,13 +64,13 @@ func loginCallback(params map[string][]string) {
 
 	token := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", options.ClientId, options.ClientSecret)))
 	klog.V(50).InfoS("encoded", "token", token)
-	oauthUrl := fmt.Sprintf("%s/oauth2/token", options.SignInUrl)
+	oauthUrl := fmt.Sprintf("%s/oauth2/token", options.Domain)
 
 	data := url.Values{
 		"grant_type":   {"authorization_code"},
 		"client_id":    {options.ClientId},
 		"code":         code,
-		"redirect_uri": {fmt.Sprintf("http://%s", options.RedirectUri)},
+		"redirect_uri": {fmt.Sprintf("http://%s", util.CallbackUrl())},
 	}
 
 	client := &http.Client{}
@@ -117,16 +108,13 @@ var Cmd = &cobra.Command{
 
 		toOptions(args)
 
-		klog.V(100).InfoS(cmd.PersistentFlags().FlagUsages(), "port", options.Port)
-
-		klog.V(100).InfoS("options", "port", options.Port)
-
 		wg := new(sync.WaitGroup)
 		wg.Add(2)
 		go util.RunCallbackServer(wg, loginCallback)
 		go util.OpenBrowser(wg, options.LoginUrl)
 		wg.Wait()
 
+		// print output
 		fmt.Print(session.AccessToken)
 
 	},

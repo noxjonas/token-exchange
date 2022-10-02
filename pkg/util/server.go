@@ -13,6 +13,10 @@ import (
 //go:embed static/index.html
 var html string
 
+func CallbackUrl() string {
+	return fmt.Sprintf("localhost:%s", viper.GetString("port"))
+}
+
 type CallbackFn func(map[string][]string)
 
 func RunCallbackServer(wg *sync.WaitGroup, fn CallbackFn) {
@@ -31,13 +35,11 @@ func RunCallbackServer(wg *sync.WaitGroup, fn CallbackFn) {
 		wg.Done()
 	})
 
-	redirectUri := fmt.Sprintf("localhost:%s", viper.GetString("port"))
-
-	l, err := net.Listen("tcp", redirectUri)
+	l, err := net.Listen("tcp", CallbackUrl())
 	CheckErr(err)
 
 	// server is ready
-	klog.V(50).InfoS(fmt.Sprintf("listening for response on: http://%s", redirectUri))
+	klog.V(50).InfoS(fmt.Sprintf("listening for response on: http://%s", CallbackUrl()))
 
 	err = http.Serve(l, nil)
 	CheckErr(err)
