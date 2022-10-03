@@ -1,2 +1,7 @@
 # token-exchange
-cli tool to athenticate to AWS Cognito user pool and retrieve tokens
+CLI to authenticate to AWS Cognito user pool.
+Opens a browser to login and returns access tokens
+
+```shell
+go test -v ./...
+```

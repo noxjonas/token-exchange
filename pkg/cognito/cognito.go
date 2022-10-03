@@ -39,14 +39,6 @@ type Session struct {
 
 var newSession bool
 
-func complete() {
-	viper.Set("cognito", config)
-	util.CheckErr(viper.WriteConfig())
-
-	fmt.Print(config.Session.AccessToken)
-	os.Exit(0)
-}
-
 var Cmd = &cobra.Command{
 	Use:     "cognito [COGNITO-DOMAIN] [CLIENT-ID] ([CLIENT_SECRET] if required)",
 	Aliases: []string{"cognito"},
@@ -88,6 +80,14 @@ var Cmd = &cobra.Command{
 	},
 }
 
+func complete() {
+	viper.Set("cognito", config)
+	util.CheckErr(viper.WriteConfig())
+
+	fmt.Print(config.Session.AccessToken)
+	os.Exit(0)
+}
+
 func toOptions(args []string) error {
 	var err error
 
@@ -106,6 +106,11 @@ func toOptions(args []string) error {
 		} else {
 			config.ClientSecret = ""
 		}
+
+	}
+
+	if !strings.HasPrefix(config.Domain, "http") {
+		return errors.New("cognito domain should start with 'https://'")
 	}
 
 	config.LoginUrl = fmt.Sprintf(
