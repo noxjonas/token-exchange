@@ -72,7 +72,7 @@ var Cmd = &cobra.Command{
 
 		wg := new(sync.WaitGroup)
 		wg.Add(3)
-		go util.RunCallbackServer(wg, loginCallback)
+		go util.RunServer(wg, loginCallback)
 		go util.OpenBrowser(wg, config.LoginUrl)
 		wg.Wait()
 
@@ -115,7 +115,7 @@ func toOptions(args []string) error {
 
 	config.LoginUrl = fmt.Sprintf(
 		"%s/login?response_type=code&client_id=%s&redirect_uri=http://%s",
-		config.Domain, config.ClientId, util.CallbackUrl(),
+		config.Domain, config.ClientId, util.GetUrl(),
 	)
 
 	return err
@@ -130,7 +130,7 @@ func healthCheck() error {
 	client := new(http.Client)
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if strings.Contains(req.URL.String(), "redirect_mismatch") {
-			return fmt.Errorf("invalid redirect path: 'http://%s' is not added to allowed redirect urls in your user pool", util.CallbackUrl())
+			return fmt.Errorf("invalid redirect path: 'http://%s' is not added to allowed redirect urls in your user pool", util.GetUrl())
 		} else if strings.Contains(req.URL.String(), "Client+does+not+exist") {
 			return fmt.Errorf("invalid client id '%s'", config.ClientId)
 		}
@@ -201,7 +201,7 @@ func loginCallback(params map[string][]string) error {
 		"grant_type":   {"authorization_code"},
 		"client_id":    {config.ClientId},
 		"code":         params["code"],
-		"redirect_uri": {fmt.Sprintf("http://%s", util.CallbackUrl())},
+		"redirect_uri": {fmt.Sprintf("http://%s", util.GetUrl())},
 	}
 
 	statusCode, body, err := cognitoOAuthRequest(data)
