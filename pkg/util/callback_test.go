@@ -14,14 +14,12 @@ func setPort(port int) {
 
 func TestGetUrl(t *testing.T) {
 	url := GetUrl()
-	t.Logf("url: %s", url)
 	if url != "localhost:8080" {
 		t.Error("GetUrl: without viper config, default callback server should be localhost:8080")
 	}
 
 	setPort(8081)
 	url = GetUrl()
-	t.Logf("url: %s", url)
 	if url != "localhost:8081" {
 		t.Error("GetUrl: failed to get port from viper")
 	}

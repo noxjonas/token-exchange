@@ -22,16 +22,16 @@ func GetUrl() string {
 	return fmt.Sprintf("localhost:%s", port)
 }
 
+// must run in a separate goroutine to ensure that callback HTML is served before the program ends
 func handler(wg *sync.WaitGroup, r *http.Request, fn Fn) {
-	// must run in a separate goroutine to ensure that callback HTML is served before the program ends
 	CheckErr(fn(r.URL.Query()))
 	wg.Done()
 }
 
 type Fn func(map[string][]string) error
 
+// RunServer emits wg.Done() when server starts listening, and once when callback is triggered
 func RunServer(wg *sync.WaitGroup, fn Fn) {
-	// emits wg.Done() when server starts listening, and once callback was triggered
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
