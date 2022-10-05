@@ -1,6 +1,6 @@
 # token-exchange
 CLI to authenticate to AWS Cognito user pool.
-Opens a browser to login and returns access token
+Opens a browser to login and returns JWTs
 
 # Usage
 Provide AWS Cognito's domain (i.e. target for Hosted UI), client id
