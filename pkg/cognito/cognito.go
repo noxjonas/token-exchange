@@ -17,6 +17,13 @@ import (
 	"tx/pkg/util"
 )
 
+//
+//func GetOutput() {
+//	switch Optio {
+//
+//	}
+//}
+
 type cognitoConfig struct {
 	Domain       string
 	ClientId     string
@@ -64,7 +71,7 @@ var Cmd = &cobra.Command{
 		// otherwise, init new session
 		err = toOptions(args)
 		if err != nil {
-			cmd.Help()
+			util.CheckErr(cmd.Help())
 			os.Exit(0)
 		}
 
@@ -84,7 +91,19 @@ func complete() {
 	viper.Set("cognito", config)
 	util.CheckErr(viper.WriteConfig())
 
-	fmt.Print(config.Session.AccessToken)
+	switch OutputType {
+	case outputAccessToken:
+		fmt.Print(config.Session.AccessToken)
+	case outputRefreshToken:
+		fmt.Print(config.Session.RefreshToken)
+	case outputIdToken:
+		fmt.Print(config.Session.IdToken)
+	case outputJson:
+		bytes, err := json.Marshal(config.Session)
+		util.CheckErr(err)
+		fmt.Print(string(bytes))
+	}
+
 	os.Exit(0)
 }
 
@@ -106,7 +125,6 @@ func toOptions(args []string) error {
 		} else {
 			config.ClientSecret = ""
 		}
-
 	}
 
 	if !strings.HasPrefix(config.Domain, "http") {
@@ -225,4 +243,5 @@ func loginCallback(params map[string][]string) error {
 
 func init() {
 	Cmd.Flags().BoolVar(&newSession, "new-session", false, "skips resuming previous session")
+	Cmd.Flags().Var(&OutputType, "output", `possible options: "json", "access", "refresh", "id"`)
 }
